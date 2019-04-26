@@ -11,6 +11,7 @@ RUN ["cmake", "--build", ".", "--target", "install"]
 
 WORKDIR /usr/src/app
 COPY bin bin
+COPY cmake cmake
 COPY CMakeLists.txt ./
 COPY include include
 COPY test test
