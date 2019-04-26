@@ -30,7 +30,7 @@ if(FUNCTION2_BUILD_TESTS)
     catch_discover_tests(test_fn2)
 endif()
 
-option(FUNCTION2_BUILD_DOCS "Build docs for Function2." ON)
+option(FUNCTION2_BUILD_DOCS "Build docs for Function2." OFF)
 if(FUNCTION2_BUILD_DOCS)
     set(DOXYGEN_SKIP_DOT ON)
     find_package(Doxygen REQUIRED)
