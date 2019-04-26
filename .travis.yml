@@ -23,7 +23,7 @@ jobs:
       script:
         - mkdir build
         - cd build
-        - cmake .. -DFUNCTION2_BUILD_DOCS=ON
+        - cmake .. -DFUNCTION_BUILD_TESTS=OFF -DFUNCTION2_BUILD_DOCS=ON
         - cmake --build . --target doc
         - cd ..
       env: TEST_SUITE=""
