@@ -1,5 +1,7 @@
 FROM gregjm/cpp-build
 
+RUN ["yum", "install", "-y", "git"]
+
 WORKDIR /usr/src
 RUN ["git", "clone", "--single-branch", "--branch", "v2.7.2", "--depth=1", "https://github.com/catchorg/Catch2.git"]
 WORKDIR /usr/src/Catch2/build
