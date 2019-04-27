@@ -25,6 +25,7 @@
 
 #include <functional>
 #include <numeric>
+#include <random>
 #include <utility>
 #include <vector>
 
@@ -110,30 +111,57 @@ TEST_CASE("Function(F&&)", "[fn2::Function]") {
 }
 
 TEST_CASE("Function(const Function&)", "[fn2::Function]") {
-    const fn2::Function<int(int)> f = times2;
-
-    {
+    SECTION("function") {
+        fn2::Function<int(int)> f = times2;
         const fn2::Function<int(int)> g = f;
+        f = div2;
 
         REQUIRE(f);
         REQUIRE(g);
-        REQUIRE(f(5) == 10);
+        REQUIRE(f(5) == 2);
         REQUIRE(g(5) == 10);
     }
 
-    REQUIRE(f);
-    REQUIRE(f(5) == 10);
+    SECTION("complex lambda expression") {
+        fn2::Function<int(int)> f = [gen = std::mt19937()](int x) mutable {
+            std::uniform_int_distribution<> dist(x);
+
+            return dist(gen);
+        };
+
+        const fn2::Function<int(int)> g = f;
+
+        f = [gen = std::mt19937()](int x) mutable {
+            std::uniform_int_distribution<> dist(0, x - 1);
+
+            return dist(gen);
+        };
+
+        REQUIRE(f);
+        REQUIRE(g);
+        REQUIRE(f(5) < 5);
+        REQUIRE(g(5) >= 5);
+    }
 }
 
 TEST_CASE("Function(Function&&)", "[fn2::Function]") {
-    fn2::Function<int(int)> f = times2;
-    const fn2::Function<int(int)> g = std::move(f);
+    SECTION("non-empty operands") {
+        fn2::Function<int(int)> f = times2;
+        const fn2::Function<int(int)> g = std::move(f);
 
-    REQUIRE(g);
-    REQUIRE(g(5) == 10);
+        REQUIRE(g);
+        REQUIRE(g(5) == 10);
 
-    if (f) {
-        REQUIRE(f(5) == 10);
+        if (f) {
+            REQUIRE(f(5) == 10);
+        }
+    }
+
+    SECTION("empty operand") {
+        fn2::Function<int(int)> f;
+        const fn2::Function<int(int)> g = std::move(f);
+
+        REQUIRE_FALSE(f);
     }
 }
 
@@ -189,15 +217,40 @@ TEST_CASE("Function(std::in_place_type_t<F>, Us&&...)", "[fn2::Function]") {
 }
 
 TEST_CASE("operator=(const Function&)", "[fn2::Function]") {
-    const fn2::Function<int(int)> f = times2;
-    fn2::Function<int(int)> g;
+    SECTION("function") {
+        fn2::Function<int(int)> f = times2;
+        fn2::Function<int(int)> g;
 
-    g = f;
+        g = f;
+        f = div2;
 
-    REQUIRE(f);
-    REQUIRE(g);
-    REQUIRE(f(5) == 10);
-    REQUIRE(g(5) == 10);
+        REQUIRE(f);
+        REQUIRE(g);
+        REQUIRE(f(5) == 2);
+        REQUIRE(g(5) == 10);
+    }
+
+    SECTION("complex lambda expression") {
+        fn2::Function<int(int)> f = [gen = std::mt19937()](int x) mutable {
+            std::uniform_int_distribution<> dist(x);
+
+            return dist(gen);
+        };
+
+        fn2::Function<int(int)> g;
+        g = f;
+
+        f = [gen = std::mt19937()](int x) mutable {
+            std::uniform_int_distribution<> dist(0, x - 1);
+
+            return dist(gen);
+        };
+
+        REQUIRE(f);
+        REQUIRE(g);
+        REQUIRE(f(5) < 5);
+        REQUIRE(g(5) >= 5);
+    }
 }
 
 TEST_CASE("operator=(Function&&)", "[fn2::Function]") {
@@ -359,20 +412,69 @@ TEST_CASE("reset()", "[fn2::Function]") {
 }
 
 TEST_CASE("swap(Function&)", "[fn2::Function]") {
-    fn2::Function<int(int)> f = times2;
-    fn2::Function<int(int)> g = div2;
+    SECTION("two functions") {
+        fn2::Function<int(int)> f = times2;
+        fn2::Function<int(int)> g = div2;
 
-    f.swap(g);
+        f.swap(g);
 
-    REQUIRE(f);
-    REQUIRE(g);
-    REQUIRE(f(5) == 2);
-    REQUIRE(g(5) == 10);
+        REQUIRE(f);
+        REQUIRE(g);
+        REQUIRE(f(5) == 2);
+        REQUIRE(g(5) == 10);
 
-    swap(f, g);
+        swap(f, g);
 
-    REQUIRE(f);
-    REQUIRE(g);
-    REQUIRE(f(5) == 10);
-    REQUIRE(g(5) == 2);
+        REQUIRE(f);
+        REQUIRE(g);
+        REQUIRE(f(5) == 10);
+        REQUIRE(g(5) == 2);
+    }
+
+    SECTION("two lambda expressions") {
+        fn2::Function<int(int)> f = [](int x) { return x * 2; };
+        fn2::Function<int(int)> g = [](int x) { return x / 2; };
+
+        f.swap(g);
+
+        REQUIRE(f);
+        REQUIRE(g);
+        REQUIRE(f(5) == 2);
+        REQUIRE(g(5) == 10);
+
+        swap(f, g);
+
+        REQUIRE(f);
+        REQUIRE(g);
+        REQUIRE(f(5) == 10);
+        REQUIRE(g(5) == 2);
+    }
+
+    SECTION("two complex lambda expressions") {
+        fn2::Function<int(int)> f = [gen = std::mt19937()](int x) mutable {
+            std::uniform_int_distribution<> dist(x);
+
+            return dist(gen);
+        };
+
+        fn2::Function<int(int)> g = [gen = std::mt19937()](int x) mutable {
+            std::uniform_int_distribution<> dist(0, x - 1);
+
+            return dist(gen);
+        };
+
+        f.swap(g);
+
+        REQUIRE(f);
+        REQUIRE(g);
+        REQUIRE(f(5) < 5);
+        REQUIRE(g(5) >= 5);
+
+        swap(f, g);
+
+        REQUIRE(f);
+        REQUIRE(g);
+        REQUIRE(f(5) >= 5);
+        REQUIRE(g(5) < 5);
+    }
 }
