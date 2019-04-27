@@ -33,7 +33,7 @@ jobs:
         - git clone --single-branch --branch v2.7.2 --depth=1 https://github.com/catchorg/Catch2.git
         - mkdir Catch2/build
         - cd Catch2/build
-        - cmake .. -G Ninja -DCMAKE_BUILD_TYPE=Release
+        - cmake .. -G Ninja -DCMAKE_BUILD_TYPE=Release -DCATCH_BUILD_TESTING=OFF -DCATCH_INSTALL_DOCS=OFF
         - cmake --build . -j `nproc`
         - sudo ninja install
         - cd ../..
