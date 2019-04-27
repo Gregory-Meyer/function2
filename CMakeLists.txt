@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.12)
 
-project(Function2 VERSION 0.1.0)
+project(Function2 VERSION 0.1.1)
 
 add_library(function2 INTERFACE)
 add_library(Function2::function2 ALIAS function2)
