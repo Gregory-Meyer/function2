@@ -1,6 +1,7 @@
 # Function2
 
-[![Travis CI][shields.io]][travis-ci.com]
+[![Travis CI][Shields.io:Travis]][Travis]
+[![Codecov][Shields.io:Codecov]][Codecov]
 
 Function2 is a C++17 template class to wrap any invocable object.
 
@@ -50,5 +51,7 @@ sudo cmake --build . --target install
 
 Function2 is licensed under the MIT license.
 
-[travis-ci.com]: https://travis-ci.com/Gregory-Meyer/function2/
-[shields.io]: https://img.shields.io/travis/com/Gregory-Meyer/function2.svg
+[Travis]: https://travis-ci.com/Gregory-Meyer/function2/
+[Codecov]: https://codecov.io/gh/Gregory-Meyer/function2
+[Shields.io:Travis]: https://img.shields.io/travis/com/Gregory-Meyer/function2.svg
+[Shields.io:Codecov]: https://img.shields.io/codecov/c/gh/Gregory-Meyer/function2.svg
