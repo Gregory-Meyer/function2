@@ -62,7 +62,7 @@ template <typename R, typename ...As>
 class Function<R(As...)> {
 public:
     /** @returns a Function that does not wrap any object. */
-    Function() noexcept = default;
+    inline Function() noexcept;
 
     /**
      *  @tparam std::decay_t<F> must not be an object of type Function.
@@ -232,12 +232,16 @@ private:
 
     mutable Storage storage_;
     const detail::Vtable<R, As...> *vptr_ = nullptr;
-    bool is_ptr_ = true;
+    bool is_ptr_;
 };
 
 /** Swaps ownership of two Function's wrapped objects. */
 template <typename R, typename ...As>
 inline void swap(Function<R(As...)> &lhs, Function<R(As...)> &rhs) noexcept;
+
+/** @returns a Function that does not wrap any object. */
+template <typename R, typename ...As>
+Function<R(As...)>::Function() noexcept { }
 
 /**
  *  @tparam std::decay_t<F> must not be an object of type Function.
@@ -318,7 +322,7 @@ Function<R(As...)>::Function(const Function &other) : vptr_(other.vptr_), is_ptr
         return;
     }
 
-    if (other.is_ptr_) {
+    if (is_ptr_) {
         as_ptr() = vptr_->clone(other.as_ptr());
     } else {
         vptr_->copy(&storage_, &other.storage_);
@@ -336,9 +340,9 @@ Function<R(As...)>::Function(Function &&other) noexcept
         return;
     }
 
-    if (other.is_ptr_) {
+    if (is_ptr_) {
         as_ptr() = other.as_ptr();
-        other.vptr_ = nullptr;
+        vptr_ = nullptr;
     } else {
         vptr_->move(&storage_, &other.storage_);
     }
@@ -465,12 +469,32 @@ void Function<R(As...)>::reset() noexcept {
 /** Swaps ownership of wrapped objects with another Function. */
 template <typename R, typename ...As>
 void Function<R(As...)>::swap(Function &other) noexcept {
-    if (this == &other) {
+    if (this == &other || (!vptr_ && !other.vptr_)) {
         return;
     }
 
     if (vptr_ == other.vptr_ && !is_ptr_ && !other.is_ptr_) {
         vptr_->swap(&storage_, &other.storage_);
+    } else if (!vptr_) {
+        is_ptr_ = other.is_ptr_;
+
+        if (is_ptr_) {
+            as_ptr() = other.as_ptr();
+            other.as_ptr() = nullptr;
+        } else {
+            other.vptr_->move(&storage_, &other.storage_);
+            other.vptr_->destroy(&other.storage_);
+        }
+    } else if (!other.vptr_) {
+        other.is_ptr_ = is_ptr_;
+
+        if (is_ptr_) {
+            other.as_ptr() = as_ptr();
+            as_ptr() = nullptr;
+        } else {
+            vptr_->move(&other.storage_, &storage_);
+            vptr_->destroy(&storage_);
+        }
     } else if (is_ptr_) {
         if (other.is_ptr_) {
             std::swap(as_ptr(), other.as_ptr());
@@ -560,8 +584,8 @@ void Function<R(As...)>::construct(Ts &&...ts) {
     vptr_ = &detail::get_vtbl<Obj, R, As...>();
 
     if constexpr (sizeof(Obj) <= sizeof(Storage) && alignof(Storage) % alignof(Obj) == 0) {
-        new (&storage_) Obj(std::forward<Ts>(ts)...);
         is_ptr_ = false;
+        new (&storage_) Obj(std::forward<Ts>(ts)...);
     } else {
         void *const ptr = std::malloc(sizeof(Obj));
 
@@ -577,8 +601,8 @@ void Function<R(As...)>::construct(Ts &&...ts) {
             throw;
         }
 
-        as_ptr() = ptr;
         is_ptr_ = true;
+        as_ptr() = ptr;
     }
 }
 
