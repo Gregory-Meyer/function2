@@ -7,6 +7,7 @@ extraction:
         packages:
           - cmake
           - g++-8
+          - ninja-build
       after_prepare:
         - mkdir -p $LGTM_WORKSPACE/latest-gcc-symlinks
         - ln -s /usr/bin/g++-8 $LGTM_WORKSPACE/latest-gcc-symlinks/g++
