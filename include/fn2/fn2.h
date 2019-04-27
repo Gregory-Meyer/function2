@@ -27,6 +27,7 @@
 #include <fn2/detail.h>
 
 #include <cassert>
+#include <cstddef>
 #include <initializer_list>
 #include <memory>
 #include <type_traits>
@@ -128,7 +129,10 @@ public:
      *  @param other will no longer wrap an object.
      *  @returns a Function that wraps the object that other wrapped.
      */
-    Function(Function &&other) noexcept = default;
+    inline Function(Function &&other) noexcept;
+
+    /** Deallocates and destroys any wrapped object. */
+    inline ~Function();
 
     /**
      *  @returns this Function, which now wraps an object copied from
@@ -215,9 +219,18 @@ public:
     inline explicit operator bool() const noexcept;
 
 private:
-    std::unique_ptr<detail::Invocable<R(As...)>> clone() const;
+    using Storage = std::aligned_storage_t<16>;
 
-    std::unique_ptr<detail::Invocable<R(As...)>> invocable_ptr_;
+    template <typename F, typename ...Ts>
+    inline void construct(Ts &&...ts);
+
+    inline void*& as_ptr() noexcept;
+
+    inline void* as_ptr() const noexcept;
+
+    mutable Storage storage_;
+    const detail::Vtable<R, As...> *vptr_ = nullptr;
+    bool is_ptr_ = true;
 };
 
 /** Swaps ownership of two Function's wrapped objects. */
@@ -237,12 +250,9 @@ inline void swap(Function<R(As...)> &lhs, Function<R(As...)> &rhs) noexcept;
  */
 template <typename R, typename ...As>
 template <typename F, std::enable_if_t<!std::is_same_v<std::decay_t<F>, Function<R(As...)>>, int>>
-Function<R(As...)>::Function(F &&f) : invocable_ptr_(
-    detail::make_invocable<R(As...)>(
-        std::in_place_type<std::decay_t<F>>,
-        std::forward<F>(f)
-    )
-) { }
+Function<R(As...)>::Function(F &&f) {
+    construct<F>(std::forward<F>(f));
+}
 
 /**
  *  @tparam std::decay_t<F> must be default constructible.
@@ -255,9 +265,9 @@ Function<R(As...)>::Function(F &&f) : invocable_ptr_(
  */
 template <typename R, typename ...As>
 template <typename F>
-Function<R(As...)>::Function(std::in_place_type_t<F>) : invocable_ptr_(
-    detail::make_invocable<R(As...)>(std::in_place_type<std::decay_t<F>>)
-) { }
+Function<R(As...)>::Function(std::in_place_type_t<F>) {
+    construct<F>();
+}
 
 /**
  *  @tparam std::decay_t<F> Must be constructible from (U, Us...).
@@ -271,13 +281,9 @@ Function<R(As...)>::Function(std::in_place_type_t<F>) : invocable_ptr_(
  */
 template <typename R, typename ...As>
 template <typename F, typename U, typename ...Us>
-Function<R(As...)>::Function(std::in_place_type_t<F>, U &&u, Us &&...us) : invocable_ptr_(
-    detail::make_invocable<R(As...)>(
-        std::in_place_type<F>,
-        std::forward<U>(u),
-        std::forward<Us>(us)...
-    )
-) { }
+Function<R(As...)>::Function(std::in_place_type_t<F>, U &&u, Us &&...us) {
+    construct<F>(std::forward<U>(u), std::forward<Us>(us)...);
+}
 
 /**
  *  @tparam std::decay_t<F> Must be constructible from
@@ -292,10 +298,9 @@ Function<R(As...)>::Function(std::in_place_type_t<F>, U &&u, Us &&...us) : invoc
  */
 template <typename R, typename ...As>
 template <typename F, typename U, typename ...Us>
-Function<R(As...)>::Function(std::in_place_type_t<F>, std::initializer_list<U> list, Us &&...us)
-: invocable_ptr_(
-    detail::make_invocable<R(As...)>(std::in_place_type<F>, list, std::forward<Us>(us)...)
-) { }
+Function<R(As...)>::Function(std::in_place_type_t<F>, std::initializer_list<U> list, Us &&...us) {
+    construct<F>(list, std::forward<Us>(us)...);
+}
 
 /**
  *  @returns this Function, which now wraps an object copied from
@@ -306,7 +311,42 @@ Function<R(As...)>::Function(std::in_place_type_t<F>, std::initializer_list<U> l
  *          wrapped object throws.
  */
 template <typename R, typename ...As>
-Function<R(As...)>::Function(const Function &other) : invocable_ptr_(other.clone()) { }
+Function<R(As...)>::Function(const Function &other) : vptr_(other.vptr_), is_ptr_(other.is_ptr_) {
+    if (!vptr_) {
+        return;
+    }
+
+    if (other.is_ptr_) {
+        as_ptr() = vptr_->clone(other.as_ptr());
+    } else {
+        vptr_->copy(&storage_, &other.storage_);
+    }
+}
+
+/**
+ *  @param other will no longer wrap an object.
+ *  @returns a Function that wraps the object that other wrapped.
+ */
+template <typename R, typename ...As>
+Function<R(As...)>::Function(Function &&other) noexcept
+: vptr_(other.vptr_), is_ptr_(other.is_ptr_) {
+    if (!vptr_) {
+        return;
+    }
+
+    if (other.is_ptr_) {
+        as_ptr() = other.as_ptr();
+        other.vptr_ = nullptr;
+    } else {
+        vptr_->move(&storage_, &other.storage_);
+    }
+}
+
+/** Deallocates and destroys any wrapped object. */
+template <typename R, typename ...As>
+Function<R(As...)>::~Function() {
+    reset();
+}
 
 /**
  *  @returns this Function, which now wraps an object copied from
@@ -319,7 +359,8 @@ Function<R(As...)>::Function(const Function &other) : invocable_ptr_(other.clone
 template <typename R, typename ...As>
 Function<R(As...)>& Function<R(As...)>::operator=(const Function &other) {
     if (this != &other) {
-        invocable_ptr_ = other.clone();
+        Function copy(other);
+        swap(copy);
     }
 
     return *this;
@@ -357,10 +398,8 @@ Function<R(As...)>& Function<R(As...)>::operator=(Function &&other) noexcept {
 template <typename R, typename ...As>
 template <typename F, std::enable_if_t<!std::is_same_v<std::decay_t<F>, Function<R(As...)>>, int>>
 Function<R(As...)>& Function<R(As...)>::operator=(F &&f) {
-    invocable_ptr_ = detail::make_invocable<R(As...)>(
-        std::in_place_type<std::decay_t<F>>,
-        std::forward<F>(f)
-    );
+    Function new_func = std::forward<F>(f);
+    swap(new_func);
 
     return *this;
 }
@@ -378,10 +417,8 @@ Function<R(As...)>& Function<R(As...)>::operator=(F &&f) {
 template <typename R, typename ...As>
 template <typename F, typename ...Us>
 void Function<R(As...)>::emplace(Us &&...us) {
-    invocable_ptr_ = detail::make_invocable<R(As...)>(
-        std::in_place_type<std::decay_t<F>>,
-        std::forward<Us>(us)...
-    );
+    Function g(std::in_place_type<F>, std::forward<Us>(us)...);
+    swap(g);
 }
 
 /**
@@ -398,11 +435,8 @@ void Function<R(As...)>::emplace(Us &&...us) {
 template <typename R, typename ...As>
 template <typename F, typename U, typename ...Us>
 void Function<R(As...)>::emplace(std::initializer_list<U> list, Us &&...us) {
-    invocable_ptr_ = detail::make_invocable<R(As...)>(
-        std::in_place_type<std::decay_t<F>>,
-        list,
-        std::forward<Us>(us)...
-    );
+    Function g(std::in_place_type<F>, list, std::forward<Us>(us)...);
+    swap(g);
 }
 
 /**
@@ -411,13 +445,71 @@ void Function<R(As...)>::emplace(std::initializer_list<U> list, Us &&...us) {
  */
 template <typename R, typename ...As>
 void Function<R(As...)>::reset() noexcept {
-    invocable_ptr_.reset();
+    if (!vptr_) {
+        return;
+    }
+
+    if (is_ptr_) {
+        vptr_->destroy(as_ptr());
+        std::free(as_ptr());
+        as_ptr() = nullptr;
+    } else {
+        vptr_->destroy(&storage_);
+    }
+
+    vptr_ = nullptr;
 }
 
 /** Swaps ownership of wrapped objects with another Function. */
 template <typename R, typename ...As>
 void Function<R(As...)>::swap(Function &other) noexcept {
-    invocable_ptr_.swap(other.invocable_ptr_);
+    if (this == &other) {
+        return;
+    }
+
+    if (vptr_ == other.vptr_ && !is_ptr_ && !other.is_ptr_) {
+        vptr_->swap(&storage_, &other.storage_);
+    } else if (is_ptr_) {
+        if (other.is_ptr_) {
+            std::swap(as_ptr(), other.as_ptr());
+        } else {
+            Storage temp;
+            other.vptr_->move(&temp, &other.storage_);
+            other.vptr_->destroy(&other.storage_);
+
+            other.is_ptr_ = true;
+            other.as_ptr() = as_ptr();
+
+            is_ptr_ = false;
+            other.vptr_->move(&storage_, &temp);
+            other.vptr_->destroy(&temp);
+        }
+    } else {
+        if (other.is_ptr_) {
+            Storage temp;
+            vptr_->move(&temp, &storage_);
+            vptr_->destroy(&storage_);
+
+            is_ptr_ = true;
+            as_ptr() = other.as_ptr();
+
+            other.is_ptr_ = false;
+            vptr_->move(&other.storage_, &temp);
+            vptr_->destroy(&temp);
+        } else {
+            Storage temp;
+            vptr_->move(&temp, &storage_);
+            vptr_->destroy(&storage_);
+
+            other.vptr_->move(&storage_, &other.storage_);
+            other.vptr_->destroy(&other.storage_);
+
+            vptr_->move(&other.storage_, &temp);
+            vptr_->destroy(&temp);
+        }
+    }
+
+    std::swap(vptr_, other.vptr_);
 }
 
 /**
@@ -430,15 +522,19 @@ void Function<R(As...)>::swap(Function &other) noexcept {
  */
 template <typename R, typename ...As>
 R Function<R(As...)>::operator()(As ...as) const {
-    assert(invocable_ptr_);
+    assert(vptr_);
 
-    return (*invocable_ptr_)(std::forward<As>(as)...);
+    if (is_ptr_) {
+        return vptr_->invoke(as_ptr(), std::forward<As>(as)...);
+    } else {
+        return vptr_->invoke(&storage_, std::forward<As>(as)...);
+    }
 }
 
 /** @returns true if this Function currently wraps an object. */
 template <typename R, typename ...As>
 Function<R(As...)>::operator bool() const noexcept {
-    return invocable_ptr_ != nullptr;
+    return vptr_ != nullptr;
 }
 
 /** Swaps ownership of two Function's wrapped objects. */
@@ -448,12 +544,54 @@ void swap(Function<R(As...)> &lhs, Function<R(As...)> &rhs) noexcept {
 }
 
 template <typename R, typename ...As>
-std::unique_ptr<detail::Invocable<R(As...)>> Function<R(As...)>::clone() const {
-    if (!invocable_ptr_) {
-        return nullptr;
-    }
+template <typename F, typename ...Ts>
+void Function<R(As...)>::construct(Ts &&...ts) {
+    static_assert(
+        std::is_constructible_v<std::decay_t<F>, Ts...>,
+        "std::decay_t<F> must be constructible from (Ts...)"
+    );
 
-    return invocable_ptr_->clone();
+    using Obj = std::decay_t<F>;
+
+    assert(!vptr_);
+
+    vptr_ = &detail::get_vtbl<Obj, R, As...>();
+
+    if constexpr (sizeof(Obj) <= sizeof(Storage) && alignof(Storage) % alignof(Obj) == 0) {
+        new (&storage_) Obj(std::forward<Ts>(ts)...);
+        is_ptr_ = false;
+    } else {
+        void *const ptr = std::malloc(sizeof(Obj));
+
+        if (!ptr) {
+            throw std::bad_alloc();
+        }
+
+        try {
+            new (ptr) Obj(std::forward<Ts>(ts)...);
+        } catch (...) {
+            std::free(ptr);
+
+            throw;
+        }
+
+        as_ptr() = ptr;
+        is_ptr_ = true;
+    }
+}
+
+template <typename R, typename ...As>
+void*& Function<R(As...)>::as_ptr() noexcept {
+    assert(is_ptr_);
+
+    return *reinterpret_cast<void**>(&storage_);
+}
+
+template <typename R, typename ...As>
+void* Function<R(As...)>::as_ptr() const noexcept {
+    assert(is_ptr_);
+
+    return *reinterpret_cast<void *const *>(&storage_);
 }
 
 } // namespace fn2
