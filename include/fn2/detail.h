@@ -64,7 +64,7 @@ static const Vtable<R, As...>& get_vtbl() noexcept {
         [](void *self, As ...as) -> R {
             return std::invoke(*static_cast<F*>(self), std::forward<As>(as)...);
         },
-        [](void *self) noexcept {
+        []([[maybe_unused]] void *self) noexcept {
             if constexpr (!std::is_trivially_destructible_v<F>) {
                 static_cast<F*>(self)->F::~F();
             }
