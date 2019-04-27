@@ -30,6 +30,11 @@
 
 #include <catch2/catch.hpp>
 
+using Vector = std::vector<int>;
+using Pair = std::pair<int, int>;
+
+template class fn2::Function<int(int)>;
+
 namespace {
 
 constexpr int times2(int x) noexcept {
@@ -88,8 +93,6 @@ TEST_CASE("Function(F&&)", "[fn2::Function]") {
     }
 
     SECTION("pointer to member function") {
-        using Vector = std::vector<int>;
-
         const fn2::Function<Vector::size_type(const Vector&)> f = &Vector::size;
         const Vector v = {0, 1, 2, 3};
 
@@ -98,8 +101,6 @@ TEST_CASE("Function(F&&)", "[fn2::Function]") {
     }
 
     SECTION("pointer to member data") {
-        using Pair = std::pair<int, int>;
-
         const fn2::Function<const int&(const Pair&)> f = &Pair::first;
         const Pair p = {0, 1};
 
@@ -259,8 +260,6 @@ TEST_CASE("operator=(F&&)", "[fn2::Function]") {
     }
 
     SECTION("pointer to member function") {
-        using Vector = std::vector<int>;
-
         fn2::Function<Vector::size_type(const Vector&)> f;
         f = &Vector::size;
         const Vector v = {0, 1, 2, 3};
@@ -270,8 +269,6 @@ TEST_CASE("operator=(F&&)", "[fn2::Function]") {
     }
 
     SECTION("pointer to member data") {
-        using Pair = std::pair<int, int>;
-
         fn2::Function<const int&(const Pair&)> f;
         f = &Pair::first;
         const Pair p = {0, 1};
@@ -347,8 +344,6 @@ TEST_CASE("reset()", "[fn2::Function]") {
     }
 
     SECTION("pointer to member function") {
-        using Vector = std::vector<int>;
-
         fn2::Function<Vector::size_type(const Vector&)> f = &Vector::size;
         f.reset();
 
@@ -356,8 +351,6 @@ TEST_CASE("reset()", "[fn2::Function]") {
     }
 
     SECTION("pointer to member data") {
-        using Pair = std::pair<int, int>;
-
         fn2::Function<const int&(const Pair&)> f = &Pair::first;
         f.reset();
 
