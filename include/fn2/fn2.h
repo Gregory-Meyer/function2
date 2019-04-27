@@ -317,10 +317,12 @@ Function<R(As...)>::Function(std::in_place_type_t<F>, std::initializer_list<U> l
  *          wrapped object throws.
  */
 template <typename R, typename ...As>
-Function<R(As...)>::Function(const Function &other) : is_ptr_(other.is_ptr_), vptr_(other.vptr_) {
+Function<R(As...)>::Function(const Function &other) : vptr_(other.vptr_) {
     if (!vptr_) {
         return;
     }
+
+    is_ptr_ = other.is_ptr_;
 
     if (is_ptr_) {
         as_ptr() = vptr_->clone(other.as_ptr());
@@ -334,11 +336,12 @@ Function<R(As...)>::Function(const Function &other) : is_ptr_(other.is_ptr_), vp
  *  @returns a Function that wraps the object that other wrapped.
  */
 template <typename R, typename ...As>
-Function<R(As...)>::Function(Function &&other) noexcept
-: is_ptr_(other.is_ptr_), vptr_(other.vptr_) {
+Function<R(As...)>::Function(Function &&other) noexcept : vptr_(other.vptr_) {
     if (!vptr_) {
         return;
     }
+
+    is_ptr_ = other.is_ptr_;
 
     if (is_ptr_) {
         as_ptr() = other.as_ptr();
