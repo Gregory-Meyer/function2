@@ -1,0 +1,30 @@
+path_classifiers:
+  test:
+    - "test/*.cpp"
+extraction:
+  cpp:
+     prepare:
+        packages:
+          - cmake
+          - g++-8
+          - ninja-build
+      after_prepare:
+        - mkdir -p $LGTM_WORKSPACE/latest-gcc-symlinks
+        - ln -s /usr/bin/g++-8 $LGTM_WORKSPACE/latest-gcc-symlinks/g++
+        - ln -s /usr/bin/gcc-8 $LGTM_WORKSPACE/latest-gcc-symlinks/gcc
+        - export PATH=$LGTM_WORKSPACE/latest-gcc-symlinks:$PATH
+        - git clone --single-branch --branch v2.7.2 --depth=1 https://github.com/catchorg/Catch2.git
+        - mkdir Catch2/build
+        - cd Catch2/build
+        - cmake .. -G Ninja -DCMAKE_BUILD_TYPE=Release -DCATCH_BUILD_TESTING=OFF -DCATCH_INSTALL_DOCS=OFF -DCMAKE_INSTALL_PREFIX="$HOME/.local"
+        - cmake --build . -j `nproc`
+        - cmake --build . --target install
+        - cd ../..
+        - rm -rf Catch2
+        - export CMAKE_PREFIX_PATH="$HOME/.local:${CMAKE_PREFIX_PATH}"
+     configure:
+        command:
+          - cmake .. -G Ninja -DCMAKE_BUILD_TYPE=Debug -DFUNCTION2_BUILD_TESTS=ON
+      index:
+        build_command:
+          - cmake --build . -j `nproc`
