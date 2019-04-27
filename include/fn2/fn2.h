@@ -141,15 +141,13 @@ public:
     inline Function& operator=(const Function &other);
 
     /**
-     *  Destroys and deallocates this Function's wrapped object, if
-     *  there is one, then takes ownership of the object wrapped by
-     *  other.
+     *  Swaps ownership of this Function's wrapped object with other.
      *
      *  @param other will no longer wrap an object.
      *  @returns this Function, which now that wraps the object that
      *           other wrapped.
      */
-    Function& operator=(Function &&other) noexcept = default;
+    inline Function& operator=(Function &&other) noexcept;
 
     /**
      *  If an exception is thrown, this Function will remain unchanged.
@@ -211,7 +209,7 @@ public:
      *  @throws any exceptions that the wrapped object throws on
      *          invocation.
      */
-    inline R operator()(As ...as);
+    inline R operator()(As ...as) const;
 
     /** @returns true if this Function currently wraps an object. */
     inline explicit operator bool() const noexcept;
@@ -328,6 +326,22 @@ Function<R(As...)>& Function<R(As...)>::operator=(const Function &other) {
 }
 
 /**
+ *  Swaps ownership of this Function's wrapped object with other.
+ *
+ *  @param other will no longer wrap an object.
+ *  @returns this Function, which now that wraps the object that
+ *           other wrapped.
+ */
+template <typename R, typename ...As>
+Function<R(As...)>& Function<R(As...)>::operator=(Function &&other) noexcept {
+    if (this != &other) {
+        swap(other);
+    }
+
+    return *this;
+}
+
+/**
  *  If an exception is thrown, this Function will remain unchanged.
  *
  *  @tparam std::decay_t<F> must not be an object of type Function.
@@ -415,7 +429,7 @@ void Function<R(As...)>::swap(Function &other) noexcept {
  *          invocation.
  */
 template <typename R, typename ...As>
-R Function<R(As...)>::operator()(As ...as) {
+R Function<R(As...)>::operator()(As ...as) const {
     assert(invocable_ptr_);
 
     return (*invocable_ptr_)(std::forward<As>(as)...);
