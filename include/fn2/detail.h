@@ -83,10 +83,6 @@ static const Vtable<R, As...>& get_vtbl() noexcept {
                 using std::swap;
 
                 swap(lhs, rhs);
-            } else if constexpr (std::is_nothrow_move_assignable_v<F>) {
-                F temp(std::move(rhs));
-                rhs = std::move(lhs);
-                lhs = std::move(temp);
             } else {
                 F temp(std::move(rhs));
 
