@@ -13,9 +13,3 @@ extraction:
       - ln -s /usr/bin/g++-8 $LGTM_WORKSPACE/latest-gcc-symlinks/g++
       - ln -s /usr/bin/gcc-8 $LGTM_WORKSPACE/latest-gcc-symlinks/gcc
       - export PATH=$LGTM_WORKSPACE/latest-gcc-symlinks:$PATH
-    configure:
-      command:
-        - cmake .. -G Ninja -DCMAKE_BUILD_TYPE=Debug
-    index:
-      build_command:
-        - cmake --build . -j `nproc`
