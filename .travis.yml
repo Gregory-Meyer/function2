@@ -13,17 +13,55 @@ script:
   - docker run --privileged --rm function2 "${TEST_SUITE}"
 jobs:
   include:
+    - stage: coverage
+      addons:
+        apt:
+          sources:
+            - ubuntu-toolchain-r-test
+          packages:
+            - gcc-7
+            - g++-7
+            - ninja-build
+            - lcov
+      services: []
+      env:
+        - CC=gcc-7 CXX=g++-7
+      before_install:
+        - export CC=gcc-7
+        - export CXX=g++-7
+      install:
+        - git clone --single-branch --branch v2.7.2 --depth=1 https://github.com/catchorg/Catch2.git
+        - mkdir Catch2/build
+        - cd Catch2/build
+        - cmake .. -G Ninja -DCMAKE_BUILD_TYPE=Release -DCATCH_BUILD_TESTING=OFF -DCATCH_INSTALL_DOCS=OFF
+        - cmake --build . -j `nproc`
+        - sudo ninja install
+        - cd ../..
+        - rm -rf Catch2
+      script:
+        - mkdir build
+        - cd build
+        - cmake .. -G Ninja -DFUNCTION2_BUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Debug -DCMAKE_C_FLAGS='-O0 -g --coverage -DDEBUG' -DCMAKE_CXX_FLAGS='-O0 -g --coverage -DDEBUG'
+        - cmake --build . -j `nproc`
+        - cmake --build . --target test
+      after_success:
+        - lcov --directory . --capture --output-file coverage.info
+        - lcov --remove coverage.info '/usr/*' --output-file coverage.info
+        - lcov --list coverage.info
+        - bash <(curl -s https://codecov.io/bash) -f coverage.info || echo "Codecov did not collect coverage reports"
     - stage: deploy
       if: branch = master
       services: []
-      before_install:
-        - sudo apt-get install -y doxygen
+      addons:
+        apt:
+          packages:
+            - doxygen
       install:
         - true
       script:
         - mkdir build
         - cd build
-        - cmake .. -DFUNCTION2_BUILD_TESTS=OFF -DFUNCTION2_BUILD_DOCS=ON
+        - cmake .. -DFUNCTION2_BUILD_DOCS=ON
         - cmake --build . --target doc
         - cd ..
       env: TEST_SUITE=""

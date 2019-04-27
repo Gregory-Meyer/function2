@@ -70,5 +70,6 @@ cmake .. -G Ninja -DCMAKE_BUILD_TYPE="${CMAKE_BUILD_TYPE}" \
     -DCMAKE_C_COMPILER="${CC}" -DCMAKE_CXX_COMPILER="${CXX}" \
     -DCMAKE_C_FLAGS="${CFLAGS}" -DCMAKE_CXX_FLAGS="${CXXFLAGS}" \
     -DCMAKE_EXE_LINKER_FLAGS="${LDFLAGS}" \
+    -DFUNCTION2_BUILD_TESTS=ON \
     && cmake --build . -j `nproc` \
     && cmake --build . --target test

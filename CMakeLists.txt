@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.12)
 
-project(Function2 VERSION 0.1.0)
+project(Function2 VERSION 0.1.1)
 
 add_library(function2 INTERFACE)
 add_library(Function2::function2 ALIAS function2)
@@ -11,7 +11,7 @@ target_include_directories(function2
 )
 target_compile_features(function2 INTERFACE cxx_std_17)
 
-option(FUNCTION2_BUILD_TESTS "Build tests for Function2." ON)
+option(FUNCTION2_BUILD_TESTS "Build tests for Function2." OFF)
 if(FUNCTION2_BUILD_TESTS)
     enable_testing()
 
@@ -19,11 +19,10 @@ if(FUNCTION2_BUILD_TESTS)
 
     add_executable(test_fn2 test/runner.cpp test/fn2.spec.cpp)
     target_include_directories(test_fn2
-        PUBLIC
+        PRIVATE
             ${CMAKE_CURRENT_SOURCE_DIR}/include
     )
-    target_link_libraries(test_fn2 PUBLIC Catch2::Catch2 function2)
-    target_compile_features(test_fn2 PUBLIC cxx_std_17)
+    target_link_libraries(test_fn2 PRIVATE Catch2::Catch2 function2)
 
     include(CTest)
     include(Catch)
