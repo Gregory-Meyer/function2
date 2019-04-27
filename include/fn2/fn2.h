@@ -53,8 +53,10 @@ class Function;
  *  Function::operator bool() member function, which returns false if
  *  there is no wrapped object.
  *
- *  The wrapped object is allocated on the free store and uses virtual
- *  functions to dispatch to the correct function implementation.
+ *  If the wrapped object is small enough and has a suitable alignment,
+ *  it will be stored inside the Function object without dynamic
+ *  allocation. Otherwise, the wrapped object will be stored on the
+ *  free store and handled via std::malloc()/free().
  */
 template <typename R, typename ...As>
 class Function<R(As...)> {
