@@ -221,7 +221,7 @@ public:
     inline explicit operator bool() const noexcept;
 
 private:
-    using Storage = std::aligned_storage_t<16>;
+    using Storage = std::aligned_storage_t<16 * sizeof(float) - sizeof(bool) - sizeof(void*)>;
 
     template <typename F, typename ...Ts>
     inline void construct(Ts &&...ts);
@@ -231,8 +231,8 @@ private:
     inline void* as_ptr() const noexcept;
 
     mutable Storage storage_;
-    const detail::Vtable<R, As...> *vptr_ = nullptr;
     bool is_ptr_;
+    const detail::Vtable<R, As...> *vptr_ = nullptr;
 };
 
 /** Swaps ownership of two Function's wrapped objects. */
@@ -317,7 +317,7 @@ Function<R(As...)>::Function(std::in_place_type_t<F>, std::initializer_list<U> l
  *          wrapped object throws.
  */
 template <typename R, typename ...As>
-Function<R(As...)>::Function(const Function &other) : vptr_(other.vptr_), is_ptr_(other.is_ptr_) {
+Function<R(As...)>::Function(const Function &other) : is_ptr_(other.is_ptr_), vptr_(other.vptr_) {
     if (!vptr_) {
         return;
     }
@@ -335,7 +335,7 @@ Function<R(As...)>::Function(const Function &other) : vptr_(other.vptr_), is_ptr
  */
 template <typename R, typename ...As>
 Function<R(As...)>::Function(Function &&other) noexcept
-: vptr_(other.vptr_), is_ptr_(other.is_ptr_) {
+: is_ptr_(other.is_ptr_), vptr_(other.vptr_) {
     if (!vptr_) {
         return;
     }
