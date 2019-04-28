@@ -345,7 +345,7 @@ Function<R(As...)>::Function(Function &&other) noexcept : vptr_(other.vptr_) {
 
     if (is_ptr_) {
         as_ptr() = other.as_ptr();
-        vptr_ = nullptr;
+        other.vptr_ = nullptr;
     } else {
         vptr_->move(&storage_, &other.storage_);
     }
