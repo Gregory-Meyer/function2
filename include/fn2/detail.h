@@ -25,68 +25,80 @@
 #define FN2_DETAIL_H
 
 #include <functional>
-#include <memory>
 #include <type_traits>
+#include <utility>
 
 namespace fn2::detail {
 
-template <typename S>
-class Invocable;
-
-template <typename R, typename ...As>
-class Invocable<R(As...)> {
-public:
-    virtual ~Invocable() = default;
-
-    virtual R operator()(As ...as) = 0;
-
-    virtual std::unique_ptr<Invocable<R(As...)>> clone() const = 0;
+template <typename ...Ts>
+    struct Overload : Ts... {
+    using Ts::operator()...;
 };
 
-template <typename S, typename F>
-class InvocableImpl;
+template <typename ...Ts>
+Overload(Ts...) -> Overload<Ts...>;
 
-template <typename R, typename ...As, typename F>
-class InvocableImpl<R(As...), F> : public Invocable<R(As...)> {
-public:
+template <typename R, typename ...As>
+struct Vtable {
+    R (*invoke)(void *self, As ...as);
+    void (*destroy)(void *self) noexcept;
+    void (*destroy_dealloc)(void *self) noexcept;
+    void (*copy)(void *self, const void *other);
+    void (*move)(void *self, void *other) noexcept;
+    void (*swap)(void *self, void *other) noexcept;
+    void* (*clone)(const void *self);
+};
+
+template <typename F, typename R, typename ...As>
+static const Vtable<R, As...>& get_vtbl() noexcept {
     static_assert(
         std::is_invocable_r_v<R, F&, As...>,
         "F& must be invocable with arguments (As...) to return type R"
     );
-
+    static_assert(std::is_nothrow_destructible_v<F>, "F must be nothrow destructible");
     static_assert(std::is_copy_constructible_v<F>, "F must be copy constructible");
+    static_assert(std::is_nothrow_move_constructible_v<F>, "F must be nothrow move constructible");
 
-    template <typename ...Ts>
-    InvocableImpl(Ts &&...ts) noexcept(std::is_nothrow_constructible_v<F, Ts...>)
-    : f_(std::forward<Ts>(ts)...) {
-        static_assert(
-            std::is_constructible_v<F, Ts...>,
-            "F must be constructible from (Ts...)"
-        );
-    }
+    static const Vtable<R, As...> vtbl = {
+        [](void *self, As ...as) -> R {
+            return std::invoke(*static_cast<F*>(self), std::forward<As>(as)...);
+        },
+        [](void *self) noexcept {
+            static_cast<F*>(self)->F::~F();
+        },
+        [](void *self) noexcept {
+            delete static_cast<F*>(self);
+        },
+        [](void *self, const void *other) {
+            new (self) F(*static_cast<const F*>(other));
+        },
+        [](void *self, void *other) noexcept {
+            new (self) F(std::move(*static_cast<F*>(other)));
+        },
+        [](void *self, void *other) noexcept {
+            F &lhs = *static_cast<F*>(self);
+            F &rhs = *static_cast<F*>(other);
 
-    virtual ~InvocableImpl() = default;
+            if constexpr (std::is_nothrow_swappable_v<F>) {
+                using std::swap;
 
-    R operator()(As ...as) override {
-        return std::invoke(f_, std::forward<As>(as)...);
-    }
+                swap(lhs, rhs);
+            } else {
+                F temp(std::move(rhs));
 
-    std::unique_ptr<Invocable<R(As...)>> clone() const override {
-        return std::make_unique<InvocableImpl>(f_);
-    }
+                rhs.F::~F();
+                new (other) F(std::move(lhs));
 
-private:
-    F f_;
-};
+                lhs.F::~F();
+                new (self) F(std::move(temp));
+            }
+        },
+        [](const void *self) -> void* {
+            return new F(*static_cast<const F*>(self));
+        }
+    };
 
-template <typename S, typename T, typename ...Ts>
-std::unique_ptr<Invocable<S>> make_invocable(std::in_place_type_t<T>, Ts &&...ts) {
-    static_assert(
-        std::is_constructible_v<T, Ts...>,
-        "T must be constructible from (Ts...)"
-    );
-
-    return std::make_unique<InvocableImpl<S, T>>(std::forward<Ts>(ts)...);
+    return vtbl;
 }
 
 } // namespace fn2::detail

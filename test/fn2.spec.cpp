@@ -25,6 +25,7 @@
 
 #include <functional>
 #include <numeric>
+#include <random>
 #include <utility>
 #include <vector>
 
@@ -43,6 +44,28 @@ constexpr int times2(int x) noexcept {
 
 constexpr int div2(int x) noexcept {
     return x / 2;
+}
+
+auto get_rand_min() noexcept {
+    return [gen = std::mt19937()](int min) mutable {
+        std::uniform_int_distribution<int> dist(min);
+
+        return dist(gen);
+    };
+}
+
+auto get_rand_max() noexcept {
+    return [gen = std::mt19937()](int max) mutable {
+        std::uniform_int_distribution<int> dist(0, max - 1);
+
+        return dist(gen);
+    };
+}
+
+auto get_summer(std::initializer_list<int> list) noexcept {
+    return [coefs = std::vector<int>(list)](int init) {
+        return std::accumulate(coefs.cbegin(), coefs.cend(), init, std::plus<int>());
+    };
 }
 
 } // namespace
@@ -75,14 +98,10 @@ TEST_CASE("Function(F&&)", "[fn2::Function]") {
     }
 
     SECTION("complex lambda expression") {
-        const fn2::Function<int(int)> f = [multipliers = std::vector<int>{2}](int x) {
-            return std::accumulate(
-                multipliers.cbegin(), multipliers.cend(), x, std::multiplies<int>()
-            );
-        };
+        const fn2::Function<int(int)> f = get_rand_min();
 
         REQUIRE(f);
-        REQUIRE(f(5) == 10);
+        REQUIRE(f(5) >= 5);
     }
 
     SECTION("function-like object") {
@@ -110,30 +129,90 @@ TEST_CASE("Function(F&&)", "[fn2::Function]") {
 }
 
 TEST_CASE("Function(const Function&)", "[fn2::Function]") {
-    const fn2::Function<int(int)> f = times2;
-
-    {
+    SECTION("function") {
+        fn2::Function<int(int)> f = times2;
         const fn2::Function<int(int)> g = f;
+        f = div2;
+
+        REQUIRE(f);
+        REQUIRE(g);
+        REQUIRE(f(5) == 2);
+        REQUIRE(g(5) == 10);
+    }
+
+    SECTION("complex lambda expression") {
+        fn2::Function<int(int)> f = get_rand_min();
+        const fn2::Function<int(int)> g = f;
+
+        f = get_rand_max();
+
+        REQUIRE(f);
+        REQUIRE(g);
+        REQUIRE(f(5) < 5);
+        REQUIRE(g(5) >= 5);
+    }
+
+    SECTION("empty other operand") {
+        fn2::Function<int(int)> f;
+        const fn2::Function<int(int)> g = f;
+
+        REQUIRE_FALSE(f);
+        REQUIRE_FALSE(g);
+
+        f = times2;
+
+        REQUIRE(f);
+        REQUIRE_FALSE(g);
+        REQUIRE(f(5) == 10);
+    }
+
+    SECTION("complex lambda with destructor") {
+        fn2::Function<int(int)> f = get_summer({2, 4, 6});
+        const fn2::Function<int(int)> g = f;
+
+        f = times2;
 
         REQUIRE(f);
         REQUIRE(g);
         REQUIRE(f(5) == 10);
-        REQUIRE(g(5) == 10);
+        REQUIRE(g(5) == 17);
     }
-
-    REQUIRE(f);
-    REQUIRE(f(5) == 10);
 }
 
 TEST_CASE("Function(Function&&)", "[fn2::Function]") {
-    fn2::Function<int(int)> f = times2;
-    const fn2::Function<int(int)> g = std::move(f);
+    SECTION("function") {
+        fn2::Function<int(int)> f = times2;
+        const fn2::Function<int(int)> g = std::move(f);
 
-    REQUIRE(g);
-    REQUIRE(g(5) == 10);
+        REQUIRE(g);
+        REQUIRE(g(5) == 10);
 
-    if (f) {
+        if (f) {
+            REQUIRE(f(5) == 10);
+        }
+    }
+
+    SECTION("empty operand") {
+        fn2::Function<int(int)> f;
+        fn2::Function<int(int)> g = std::move(f);
+
+        REQUIRE_FALSE(f);
+        REQUIRE_FALSE(g);
+
+        f = times2;
+
+        REQUIRE(f);
+        REQUIRE_FALSE(g);
         REQUIRE(f(5) == 10);
+    }
+
+    SECTION("complex lambda expression") {
+        fn2::Function<int(int)> f = get_rand_min();
+        const fn2::Function<int(int)> g = std::move(f);
+
+        REQUIRE_FALSE(f);
+        REQUIRE(g);
+        REQUIRE(g(5) >= 5);
     }
 }
 
@@ -189,15 +268,45 @@ TEST_CASE("Function(std::in_place_type_t<F>, Us&&...)", "[fn2::Function]") {
 }
 
 TEST_CASE("operator=(const Function&)", "[fn2::Function]") {
-    const fn2::Function<int(int)> f = times2;
-    fn2::Function<int(int)> g;
+    SECTION("function") {
+        fn2::Function<int(int)> f = times2;
+        fn2::Function<int(int)> g;
 
-    g = f;
+        g = f;
+        f = div2;
 
-    REQUIRE(f);
-    REQUIRE(g);
-    REQUIRE(f(5) == 10);
-    REQUIRE(g(5) == 10);
+        REQUIRE(f);
+        REQUIRE(g);
+        REQUIRE(f(5) == 2);
+        REQUIRE(g(5) == 10);
+    }
+
+    SECTION("complex lambda expression") {
+        fn2::Function<int(int)> f = get_rand_min();
+
+        fn2::Function<int(int)> g;
+        g = f;
+
+        f = get_rand_max();
+
+        REQUIRE(f);
+        REQUIRE(g);
+        REQUIRE(f(5) < 5);
+        REQUIRE(g(5) >= 5);
+    }
+
+    SECTION("complex lambda with destructor") {
+        fn2::Function<int(int)> f = get_summer({2, 4, 6});
+        fn2::Function<int(int)> g;
+        g = f;
+
+        f = times2;
+
+        REQUIRE(f);
+        REQUIRE(g);
+        REQUIRE(f(5) == 10);
+        REQUIRE(g(5) == 17);
+    }
 }
 
 TEST_CASE("operator=(Function&&)", "[fn2::Function]") {
@@ -216,6 +325,23 @@ TEST_CASE("operator=(Function&&)", "[fn2::Function]") {
     SECTION("empty operand") {
         fn2::Function<int(int)> f = times2;
 
+        f = fn2::Function<int(int)>();
+
+        REQUIRE_FALSE(f);
+    }
+
+    SECTION("huge lambda") {
+        fn2::Function<int(int)> f = get_rand_max();
+        fn2::Function<int(int)> g;
+        g = std::move(f);
+
+        REQUIRE_FALSE(f);
+        REQUIRE(g);
+        REQUIRE(g(5) < 5);
+    }
+
+    SECTION("empty target, empty operand") {
+        fn2::Function<int(int)> f;
         f = fn2::Function<int(int)>();
 
         REQUIRE_FALSE(f);
@@ -359,20 +485,155 @@ TEST_CASE("reset()", "[fn2::Function]") {
 }
 
 TEST_CASE("swap(Function&)", "[fn2::Function]") {
-    fn2::Function<int(int)> f = times2;
-    fn2::Function<int(int)> g = div2;
+    SECTION("two functions") {
+        fn2::Function<int(int)> f = times2;
+        fn2::Function<int(int)> g = div2;
 
-    f.swap(g);
+        f.swap(g);
 
-    REQUIRE(f);
-    REQUIRE(g);
-    REQUIRE(f(5) == 2);
-    REQUIRE(g(5) == 10);
+        REQUIRE(f);
+        REQUIRE(g);
+        REQUIRE(f(5) == 2);
+        REQUIRE(g(5) == 10);
 
-    swap(f, g);
+        swap(f, g);
 
-    REQUIRE(f);
-    REQUIRE(g);
-    REQUIRE(f(5) == 10);
-    REQUIRE(g(5) == 2);
+        REQUIRE(f);
+        REQUIRE(g);
+        REQUIRE(f(5) == 10);
+        REQUIRE(g(5) == 2);
+    }
+
+    SECTION("two lambda expressions") {
+        fn2::Function<int(int)> f = [](int x) { return x * 2; };
+        fn2::Function<int(int)> g = [](int x) { return x / 2; };
+
+        f.swap(g);
+
+        REQUIRE(f);
+        REQUIRE(g);
+        REQUIRE(f(5) == 2);
+        REQUIRE(g(5) == 10);
+
+        swap(f, g);
+
+        REQUIRE(f);
+        REQUIRE(g);
+        REQUIRE(f(5) == 10);
+        REQUIRE(g(5) == 2);
+    }
+
+    SECTION("two complex lambda expressions") {
+        fn2::Function<int(int)> f = get_rand_min();
+        fn2::Function<int(int)> g = get_rand_max();
+
+        f.swap(g);
+
+        REQUIRE(f);
+        REQUIRE(g);
+        REQUIRE(f(5) < 5);
+        REQUIRE(g(5) >= 5);
+
+        swap(f, g);
+
+        REQUIRE(f);
+        REQUIRE(g);
+        REQUIRE(f(5) >= 5);
+        REQUIRE(g(5) < 5);
+    }
+
+    SECTION("small identical stateful lambdas") {
+        const auto get_fn = [](int x) {
+            return [x](int y) { return x + y; };
+        };
+
+        fn2::Function<int(int)> f = get_fn(5);
+        fn2::Function<int(int)> g = get_fn(-5);
+
+        f.swap(g);
+
+        REQUIRE(f);
+        REQUIRE(g);
+        REQUIRE(f(5) == 0);
+        REQUIRE(g(5) == 10);
+
+        swap(f, g);
+
+        REQUIRE(f);
+        REQUIRE(g);
+        REQUIRE(f(5) == 10);
+        REQUIRE(g(5) == 0);
+    }
+
+    SECTION("complex lambda expression with empty other") {
+        fn2::Function<int(int)> f = get_rand_min();
+        fn2::Function<int(int)> g;
+
+        f.swap(g);
+
+        REQUIRE_FALSE(f);
+        REQUIRE(g);
+        REQUIRE(g(5) >= 5);
+
+        swap(f, g);
+
+        REQUIRE(f);
+        REQUIRE_FALSE(g);
+        REQUIRE(f(5) >= 5);
+    }
+
+    SECTION("function with empty other") {
+        fn2::Function<int(int)> f = times2;
+        fn2::Function<int(int)> g;
+
+        f.swap(g);
+
+        REQUIRE_FALSE(f);
+        REQUIRE(g);
+        REQUIRE(g(5) == 10);
+
+        swap(f, g);
+
+        REQUIRE(f);
+        REQUIRE_FALSE(g);
+        REQUIRE(f(5) == 10);
+    }
+
+    SECTION("function with complex lambda") {
+        fn2::Function<int(int)> f = times2;
+        fn2::Function<int(int)> g = get_rand_max();
+
+        f.swap(g);
+
+        REQUIRE(f);
+        REQUIRE(g);
+        REQUIRE(f(5) < 5);
+        REQUIRE(g(5) == 10);
+
+        swap(f, g);
+
+        REQUIRE(f);
+        REQUIRE(g);
+        REQUIRE(f(5) == 10);
+        REQUIRE(g(5) < 5);
+    }
+
+    SECTION("complex lambdas with destructors") {
+        fn2::Function<int(int)> f = get_summer({2, 4, 6});
+        fn2::Function<int(int)> g = get_summer({1, 3, 5});
+
+        f.swap(g);
+
+        REQUIRE(f);
+        REQUIRE(g);
+        REQUIRE(f(5) == 14);
+        REQUIRE(g(5) == 17);
+
+        swap(f, g);
+
+        REQUIRE(f);
+        REQUIRE(g);
+        REQUIRE(f(5) == 17);
+        REQUIRE(g(5) == 14);
+    }
 }
