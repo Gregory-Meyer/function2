@@ -533,4 +533,57 @@ TEST_CASE("swap(Function&)", "[fn2::Function]") {
         REQUIRE(f(5) == 10);
         REQUIRE(g(5) == 0);
     }
+
+    SECTION("complex lambda expression with empty other") {
+        fn2::Function<int(int)> f = get_rand_min();
+        fn2::Function<int(int)> g;
+
+        f.swap(g);
+
+        REQUIRE_FALSE(f);
+        REQUIRE(g);
+        REQUIRE(g(5) >= 5);
+
+        swap(f, g);
+
+        REQUIRE(f);
+        REQUIRE_FALSE(g);
+        REQUIRE(f(5) >= 5);
+    }
+
+    SECTION("function with empty other") {
+        fn2::Function<int(int)> f = times2;
+        fn2::Function<int(int)> g;
+
+        f.swap(g);
+
+        REQUIRE_FALSE(f);
+        REQUIRE(g);
+        REQUIRE(g(5) == 10);
+
+        swap(f, g);
+
+        REQUIRE(f);
+        REQUIRE_FALSE(g);
+        REQUIRE(f(5) == 10);
+    }
+
+    SECTION("function with complex lambda") {
+        fn2::Function<int(int)> f = times2;
+        fn2::Function<int(int)> g = get_rand_max();
+
+        f.swap(g);
+
+        REQUIRE(f);
+        REQUIRE(g);
+        REQUIRE(f(5) < 5);
+        REQUIRE(g(5) == 10);
+
+        swap(f, g);
+
+        REQUIRE(f);
+        REQUIRE(g);
+        REQUIRE(f(5) == 10);
+        REQUIRE(g(5) < 5);
+    }
 }
