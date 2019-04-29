@@ -24,31 +24,11 @@
 #ifndef FN2_DETAIL_H
 #define FN2_DETAIL_H
 
-#include <cstdlib>
 #include <functional>
-#include <memory>
 #include <type_traits>
 #include <utility>
 
 namespace fn2::detail {
-
-struct FreeDeleter {
-    void operator()(void *ptr) noexcept {
-        std::free(ptr);
-    }
-};
-
-using MallocHandle = std::unique_ptr<void, FreeDeleter>;
-
-inline MallocHandle malloc_safe(std::size_t size) {
-    void *const ptr = std::malloc(size);
-
-    if (!ptr) {
-        throw std::bad_alloc();
-    }
-
-    return MallocHandle(ptr);
-}
 
 template <typename ...Ts>
     struct Overload : Ts... {
@@ -62,10 +42,11 @@ template <typename R, typename ...As>
 struct Vtable {
     R (*invoke)(void *self, As ...as);
     void (*destroy)(void *self) noexcept;
+    void (*destroy_dealloc)(void *self) noexcept;
     void (*copy)(void *self, const void *other);
     void (*move)(void *self, void *other) noexcept;
     void (*swap)(void *self, void *other) noexcept;
-    MallocHandle (*clone)(const void *self);
+    void* (*clone)(const void *self);
 };
 
 template <typename F, typename R, typename ...As>
@@ -82,8 +63,11 @@ static const Vtable<R, As...>& get_vtbl() noexcept {
         [](void *self, As ...as) -> R {
             return std::invoke(*static_cast<F*>(self), std::forward<As>(as)...);
         },
-        []([[maybe_unused]] void *self) noexcept {
+        [](void *self) noexcept {
             static_cast<F*>(self)->F::~F();
+        },
+        [](void *self) noexcept {
+            delete static_cast<F*>(self);
         },
         [](void *self, const void *other) {
             new (self) F(*static_cast<const F*>(other));
@@ -109,11 +93,8 @@ static const Vtable<R, As...>& get_vtbl() noexcept {
                 new (self) F(std::move(temp));
             }
         },
-        [](const void *self) {
-            auto cloned = malloc_safe(sizeof(F));
-            new (cloned.get()) F(*static_cast<const F*>(self));
-
-            return cloned;
+        [](const void *self) -> void* {
+            return new F(*static_cast<const F*>(self));
         }
     };
 

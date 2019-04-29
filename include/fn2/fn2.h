@@ -27,9 +27,7 @@
 #include <fn2/detail.h>
 
 #include <cassert>
-#include <cstddef>
 #include <initializer_list>
-#include <memory>
 #include <type_traits>
 #include <utility>
 
@@ -56,7 +54,7 @@ class Function;
  *  If the wrapped object is small enough and has a suitable alignment,
  *  it will be stored inside the Function object without dynamic
  *  allocation. Otherwise, the wrapped object will be stored on the
- *  free store and handled via std::malloc()/free().
+ *  free store and handled via operator new()/operator delete().
  */
 template <typename R, typename ...As>
 class Function<R(As...)> {
@@ -325,7 +323,7 @@ Function<R(As...)>::Function(const Function &other) : vptr_(other.vptr_) {
     is_ptr_ = other.is_ptr_;
 
     if (is_ptr_) {
-        as_ptr() = vptr_->clone(other.as_ptr()).release();
+        as_ptr() = vptr_->clone(other.as_ptr());
     } else {
         vptr_->copy(&storage_, &other.storage_);
     }
@@ -459,8 +457,7 @@ void Function<R(As...)>::reset() noexcept {
     }
 
     if (is_ptr_) {
-        vptr_->destroy(as_ptr());
-        std::free(as_ptr());
+        vptr_->destroy_dealloc(as_ptr());
     } else {
         vptr_->destroy(&storage_);
     }
@@ -587,11 +584,10 @@ void Function<R(As...)>::construct(Ts &&...ts) {
         is_ptr_ = false;
         new (&storage_) Obj(std::forward<Ts>(ts)...);
     } else {
-        auto ptr = detail::malloc_safe(sizeof(Obj));
-        new (ptr.get()) Obj(std::forward<Ts>(ts)...);
+        const auto ptr = new Obj(std::forward<Ts>(ts)...);
 
         is_ptr_ = true;
-        as_ptr() = ptr.release();
+        as_ptr() = ptr;
     }
 }
 
