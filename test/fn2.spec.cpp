@@ -62,6 +62,12 @@ auto get_rand_max() noexcept {
     };
 }
 
+auto get_summer(std::initializer_list<int> list) noexcept {
+    return [coefs = std::vector<int>(list)](int init) {
+        return std::accumulate(coefs.cbegin(), coefs.cend(), init, std::plus<int>());
+    };
+}
+
 } // namespace
 
 TEST_CASE("Function()", "[fn2::Function]") {
@@ -158,6 +164,18 @@ TEST_CASE("Function(const Function&)", "[fn2::Function]") {
         REQUIRE(f);
         REQUIRE_FALSE(g);
         REQUIRE(f(5) == 10);
+    }
+
+    SECTION("complex lambda with destructor") {
+        fn2::Function<int(int)> f = get_summer({2, 4, 6});
+        const fn2::Function<int(int)> g = f;
+
+        f = times2;
+
+        REQUIRE(f);
+        REQUIRE(g);
+        REQUIRE(f(5) == 10);
+        REQUIRE(g(5) == 17);
     }
 }
 
@@ -275,6 +293,19 @@ TEST_CASE("operator=(const Function&)", "[fn2::Function]") {
         REQUIRE(g);
         REQUIRE(f(5) < 5);
         REQUIRE(g(5) >= 5);
+    }
+
+    SECTION("complex lambda with destructor") {
+        fn2::Function<int(int)> f = get_summer({2, 4, 6});
+        fn2::Function<int(int)> g;
+        g = f;
+
+        f = times2;
+
+        REQUIRE(f);
+        REQUIRE(g);
+        REQUIRE(f(5) == 10);
+        REQUIRE(g(5) == 17);
     }
 }
 
@@ -585,5 +616,24 @@ TEST_CASE("swap(Function&)", "[fn2::Function]") {
         REQUIRE(g);
         REQUIRE(f(5) == 10);
         REQUIRE(g(5) < 5);
+    }
+
+    SECTION("complex lambdas with destructors") {
+        fn2::Function<int(int)> f = get_summer({2, 4, 6});
+        fn2::Function<int(int)> g = get_summer({1, 3, 5});
+
+        f.swap(g);
+
+        REQUIRE(f);
+        REQUIRE(g);
+        REQUIRE(f(5) == 14);
+        REQUIRE(g(5) == 17);
+
+        swap(f, g);
+
+        REQUIRE(f);
+        REQUIRE(g);
+        REQUIRE(f(5) == 17);
+        REQUIRE(g(5) == 14);
     }
 }
