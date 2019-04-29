@@ -32,6 +32,24 @@
 
 namespace fn2::detail {
 
+struct FreeDeleter {
+    void operator()(void *ptr) noexcept {
+        std::free(ptr);
+    }
+};
+
+using MallocHandle = std::unique_ptr<void, FreeDeleter>;
+
+inline MallocHandle malloc_safe(std::size_t size) {
+    void *const ptr = std::malloc(size);
+
+    if (!ptr) {
+        throw std::bad_alloc();
+    }
+
+    return MallocHandle(ptr);
+}
+
 template <typename ...Ts>
     struct Overload : Ts... {
     using Ts::operator()...;
@@ -47,7 +65,7 @@ struct Vtable {
     void (*copy)(void *self, const void *other);
     void (*move)(void *self, void *other) noexcept;
     void (*swap)(void *self, void *other) noexcept;
-    void* (*clone)(const void *self);
+    MallocHandle (*clone)(const void *self);
 };
 
 template <typename F, typename R, typename ...As>
@@ -65,9 +83,7 @@ static const Vtable<R, As...>& get_vtbl() noexcept {
             return std::invoke(*static_cast<F*>(self), std::forward<As>(as)...);
         },
         []([[maybe_unused]] void *self) noexcept {
-            if constexpr (!std::is_trivially_destructible_v<F>) {
-                static_cast<F*>(self)->F::~F();
-            }
+            static_cast<F*>(self)->F::~F();
         },
         [](void *self, const void *other) {
             new (self) F(*static_cast<const F*>(other));
@@ -94,19 +110,8 @@ static const Vtable<R, As...>& get_vtbl() noexcept {
             }
         },
         [](const void *self) {
-            const auto cloned = std::malloc(sizeof(F));
-
-            if (!cloned) {
-                throw std::bad_alloc();
-            }
-
-            try {
-                new (cloned) F(*static_cast<const F*>(self));
-            } catch (...) {
-                std::free(cloned);
-
-                throw;
-            }
+            auto cloned = malloc_safe(sizeof(F));
+            new (cloned.get()) F(*static_cast<const F*>(self));
 
             return cloned;
         }

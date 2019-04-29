@@ -325,7 +325,7 @@ Function<R(As...)>::Function(const Function &other) : vptr_(other.vptr_) {
     is_ptr_ = other.is_ptr_;
 
     if (is_ptr_) {
-        as_ptr() = vptr_->clone(other.as_ptr());
+        as_ptr() = vptr_->clone(other.as_ptr()).release();
     } else {
         vptr_->copy(&storage_, &other.storage_);
     }
@@ -461,7 +461,6 @@ void Function<R(As...)>::reset() noexcept {
     if (is_ptr_) {
         vptr_->destroy(as_ptr());
         std::free(as_ptr());
-        as_ptr() = nullptr;
     } else {
         vptr_->destroy(&storage_);
     }
@@ -483,7 +482,6 @@ void Function<R(As...)>::swap(Function &other) noexcept {
 
         if (is_ptr_) {
             as_ptr() = other.as_ptr();
-            other.as_ptr() = nullptr;
         } else {
             other.vptr_->move(&storage_, &other.storage_);
             other.vptr_->destroy(&other.storage_);
@@ -493,7 +491,6 @@ void Function<R(As...)>::swap(Function &other) noexcept {
 
         if (is_ptr_) {
             other.as_ptr() = as_ptr();
-            as_ptr() = nullptr;
         } else {
             vptr_->move(&other.storage_, &storage_);
             vptr_->destroy(&storage_);
@@ -590,22 +587,11 @@ void Function<R(As...)>::construct(Ts &&...ts) {
         is_ptr_ = false;
         new (&storage_) Obj(std::forward<Ts>(ts)...);
     } else {
-        void *const ptr = std::malloc(sizeof(Obj));
-
-        if (!ptr) {
-            throw std::bad_alloc();
-        }
-
-        try {
-            new (ptr) Obj(std::forward<Ts>(ts)...);
-        } catch (...) {
-            std::free(ptr);
-
-            throw;
-        }
+        auto ptr = detail::malloc_safe(sizeof(Obj));
+        new (ptr.get()) Obj(std::forward<Ts>(ts)...);
 
         is_ptr_ = true;
-        as_ptr() = ptr;
+        as_ptr() = ptr.release();
     }
 }
 
