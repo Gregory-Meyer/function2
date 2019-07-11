@@ -1,9 +1,9 @@
 cmake_minimum_required(VERSION 3.12)
 
-project(Function2 VERSION 0.2.0)
+project(Function2 VERSION 0.2.1)
 
 add_library(function2 INTERFACE)
-add_library(Function2::function2 ALIAS function2)
+add_library(Function2::Function2 ALIAS function2)
 target_include_directories(function2
     INTERFACE
         $<INSTALL_INTERFACE:include>
